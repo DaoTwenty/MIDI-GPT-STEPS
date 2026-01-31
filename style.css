@@ -38,6 +38,14 @@
     --dm-mask: #3a3a3a;
 }
 
+[data-theme="dark"] .lab-logo {
+    filter: none;
+}
+
+[data-theme="light"] .lab-logo {
+    filter: invert(100%);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -76,6 +84,12 @@ header {
     justify-content: center;
     gap: 16px;
     margin-bottom: 24px;
+}
+
+.lab-logo {
+    width: 200px;
+    height: auto;             
+    display: block;
 }
 
 .logo {
