@@ -63,7 +63,7 @@ function initializeTheme() {
 
 let state = {
     numTracks: 4,
-    numBars: 8,
+    numBars: 16,
     selection: [],
     resampleMask: [],
     ignoreMask: [],
@@ -216,37 +216,57 @@ function renderGrid() {
 
 function setupCanvasClickHandler() {
     const canvas = document.getElementById('selectionCanvas');
-    
-    canvas.onclick = (event) => {
+    const cellSize = 40;
+    let mouseDown = false;
+    let lastCell = { i: -1, j: -1 }; // Track last cell activated
+
+    canvas.addEventListener('mousedown', (event) => {
+        mouseDown = true;
+        handleCellAtEvent(event);
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        mouseDown = false;
+        lastCell = { i: -1, j: -1 }; // reset after release
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        mouseDown = false;
+        lastCell = { i: -1, j: -1 };
+    });
+
+    canvas.addEventListener('mousemove', (event) => {
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
-        
-        const cellSize = 40;
+
         const j = Math.floor(x / cellSize);
         const i = Math.floor(y / cellSize);
-        
-        if (i >= 0 && i < state.numTracks && j >= 0 && j < state.numBars) {
-            handleCellClick(i, j);
-        }
-    };
-    
-    // Add hover effect
-    canvas.onmousemove = (event) => {
-        const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        
-        const cellSize = 40;
-        const j = Math.floor(x / cellSize);
-        const i = Math.floor(y / cellSize);
-        
+
         if (i >= 0 && i < state.numTracks && j >= 0 && j < state.numBars) {
             canvas.style.cursor = 'pointer';
+            if (mouseDown && (i !== lastCell.i || j !== lastCell.j)) {
+                handleCellClick(i, j);
+                lastCell = { i, j }; // update last cell
+            }
         } else {
             canvas.style.cursor = 'default';
         }
-    };
+    });
+
+    function handleCellAtEvent(event) {
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        const j = Math.floor(x / cellSize);
+        const i = Math.floor(y / cellSize);
+
+        if (i >= 0 && i < state.numTracks && j >= 0 && j < state.numBars) {
+            handleCellClick(i, j);
+            lastCell = { i, j }; // remember cell immediately
+        }
+    }
 }
 
 function handleCellClick(i, j) {
