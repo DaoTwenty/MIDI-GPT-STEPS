@@ -305,6 +305,7 @@ function generateSteps() {
     const tracksPerStep = parseInt(document.getElementById('tracksPerStep').value);
     const barsPerStep = parseInt(document.getElementById('barsPerStep').value);
     const shuffle = document.getElementById('shuffle').checked;
+    const percentage = parseInt(document.getElementById('percentage').value);
     const autoMask = document.getElementById('autoMask').checked;
     
     state.steps = findSteps(
@@ -312,7 +313,7 @@ function generateSteps() {
         state.barMask,
         state.resampleMask,
         state.ignoreMask,
-        { modelDim, tracksPerStep, barsPerStep, shuffle }
+        { modelDim, tracksPerStep, barsPerStep, shuffle, percentage }
     );
     
     if (autoMask) {
@@ -367,34 +368,51 @@ function findSteps(selection, barMask, resampleMask, ignoreMask, param) {
     return steps;
 }
 
-function findStepsInner(steps, selection, resampleMask, ignoreMask, preCondition, autoregressive, generated, param) {
-    const { modelDim, tracksPerStep, barsPerStep, shuffle } = param;
+function findStepsInner(
+    steps,
+    selection,
+    resampleMask,
+    ignoreMask,
+    preCondition,
+    autoregressive,
+    generated,
+    param
+) {
+    const { modelDim, tracksPerStep, barsPerStep, shuffle, percentage } = param;
+
     const nt = state.numTracks;
     const nb = state.numBars;
-    
-    const numContext = autoregressive ? modelDim - barsPerStep : Math.floor((modelDim - barsPerStep) / 2);
-    
+
+    const currentNumSteps = steps.length;
+    const numContext = autoregressive
+        ? modelDim - barsPerStep
+        : Math.floor((modelDim - barsPerStep) / 2);
+
     for (let i = 0; i < nt; i += tracksPerStep) {
         for (let j = 0; j < nb; j += barsPerStep) {
             const numTracks = Math.min(tracksPerStep, nt - i);
-            
-            const step = Array(nt).fill(null).map(() => Array(nb).fill(false));
-            const context = Array(nt).fill(null).map(() => Array(nb).fill(false));
-            const mask = Array(nt).fill(null).map(() => Array(nb).fill(false));
-            
+
+            const step = Array.from({ length: nt }, () => Array(nb).fill(false));
+            const context = Array.from({ length: nt }, () => Array(nb).fill(false));
+            const mask = Array.from({ length: nt }, () => Array(nb).fill(false));
+
             let start, end;
-            
+
             if (autoregressive) {
                 const rightOffset = Math.max((j + modelDim) - nb, 0);
                 const t = Math.min(j, nb - modelDim);
                 start = t;
                 end = t + modelDim;
-                
+
                 const kernelStart = (j > 0 ? 1 : 0) * (numContext + rightOffset);
-                
+
                 for (let ti = i; ti < i + numTracks; ti++) {
                     for (let tj = start + kernelStart; tj < end; tj++) {
-                        if (resampleMask[ti] && selection[ti][tj] && !generated[ti][tj]) {
+                        if (
+                            resampleMask[ti] &&
+                            selection[ti][tj] &&
+                            !generated[ti][tj]
+                        ) {
                             step[ti][tj] = true;
                         }
                     }
@@ -403,17 +421,21 @@ function findStepsInner(steps, selection, resampleMask, ignoreMask, preCondition
                 const t = Math.max(0, Math.min(j - numContext, nb - modelDim));
                 start = t;
                 end = t + modelDim;
-                
+
                 for (let ti = i; ti < i + numTracks; ti++) {
                     for (let tj = j; tj < Math.min(j + barsPerStep, end); tj++) {
-                        if (!resampleMask[ti] && selection[ti][tj] && !generated[ti][tj]) {
+                        if (
+                            !resampleMask[ti] &&
+                            selection[ti][tj] &&
+                            !generated[ti][tj]
+                        ) {
                             step[ti][tj] = true;
                         }
                     }
                 }
             }
-            
-            // Set context
+
+            // Context
             for (let ti = 0; ti < nt; ti++) {
                 for (let tj = start; tj < end; tj++) {
                     if (!ignoreMask[ti] && !step[ti][tj]) {
@@ -421,12 +443,17 @@ function findStepsInner(steps, selection, resampleMask, ignoreMask, preCondition
                     }
                 }
             }
-            
-            // Set mask
+
+            // Mask
             for (let ti = 0; ti < nt; ti++) {
                 for (let tj = start; tj < end; tj++) {
                     if (!step[ti][tj]) {
-                        if (context[ti][tj] && preCondition[ti][tj] && selection[ti][tj] && !generated[ti][tj]) {
+                        if (
+                            context[ti][tj] &&
+                            preCondition[ti][tj] &&
+                            selection[ti][tj] &&
+                            !generated[ti][tj]
+                        ) {
                             mask[ti][tj] = true;
                         }
                         if (preCondition[ti][tj] && !selection[ti][tj]) {
@@ -435,8 +462,8 @@ function findStepsInner(steps, selection, resampleMask, ignoreMask, preCondition
                     }
                 }
             }
-            
-            // Check if step has any generation
+
+            // Commit step
             let hasGeneration = false;
             for (let ti = 0; ti < nt; ti++) {
                 for (let tj = 0; tj < nb; tj++) {
@@ -446,11 +473,35 @@ function findStepsInner(steps, selection, resampleMask, ignoreMask, preCondition
                     }
                 }
             }
-            
+
             if (hasGeneration) {
                 steps.push({ start, end, step, context, mask });
             }
         }
+    }
+
+    // Shuffle non-autoregressive steps
+    if (!autoregressive && shuffle) {
+        for (let i = steps.length - 1; i > currentNumSteps; i--) {
+            const j =
+                currentNumSteps +
+                Math.floor(Math.random() * (i - currentNumSteps + 1));
+            [steps[i], steps[j]] = [steps[j], steps[i]];
+        }
+    }
+
+    // Percentage truncation
+    if (
+        !autoregressive &&
+        percentage < 100 &&
+        steps.length > currentNumSteps
+    ) {
+        const nonAutoregSteps = steps.length - currentNumSteps;
+        const newSize = Math.max(
+            1,
+            Math.floor(nonAutoregSteps * (percentage / 100))
+        );
+        steps.length = currentNumSteps + newSize;
     }
 }
 

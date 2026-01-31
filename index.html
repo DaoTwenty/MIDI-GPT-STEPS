@@ -20,7 +20,7 @@
         <div class="description">
             <h2 class="section-title">Description</h2>
             <p>
-                This tool visualizes how <strong>MIDI-GPT</strong>, a transformer-based generative model for symbolic music,
+                This tool visualizes how <strong><a href="https://arxiv.org/abs/2501.17011">MIDI-GPT</a></strong>, a transformer-based generative model for symbolic music,
                 decomposes musical composition into a sequence of discrete inference steps.
                 MIDI-GPT supports two complementary generation modes:
             </p>
@@ -89,6 +89,33 @@
                             </span>
                         </label>
                         <input type="number" id="barsPerStep" value="1" min="1" max="8">
+                    </div>
+                    <div class="input-wrapper">
+                        <label for="percentage">
+                            Non-autoregressive Coverage (%)
+                            <span class="legend-help" style="display: inline-flex; margin-left: 4px; vertical-align: middle;">?
+                                <span class="tooltip">
+                                    <span class="tooltip-content" style="white-space: normal;">
+                                        Percentage of non-autoregressive steps to keep after generation.
+                                        Lower values reduce the number of generation steps.
+                                    </span>
+                                </span>
+                            </span>
+                        </label>
+
+                        <input
+                            type="range"
+                            id="percentage"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value="100"
+                            oninput="document.getElementById('percentageValue').textContent = this.value"
+                        />
+
+                        <div class="range-value">
+                            <span id="percentageValue">100</span>%
+                        </div>
                     </div>
                 </div>
             </div>
