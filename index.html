@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI-GPT Inference Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-container">
+                <img src="res/metacreation.jpg" alt="Research Lab Logo" style="width: 80px; height: 80px; border-radius: 20px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);">
+            </div>
+            <h1>MIDI-GPT Inference Visualizer</h1>
+            <p class="subtitle">Interactive step-by-step visualisation</p>
+            <p class="creator-info"><span class="creator-name" id="creatorName"><a href="https://www.metacreation.net/">Metacreation Lab</a></span> • Paul Triana</p>
+        </header>
+
+        <div class="description">
+            <h2 class="section-title">Description</h2>
+            <p>
+                This tool visualizes how <strong>MIDI-GPT</strong>, a transformer-based generative model for symbolic music,
+                decomposes musical composition into a sequence of discrete inference steps.
+                MIDI-GPT supports two complementary generation modes:
+            </p>
+
+            <ul>
+                <li>
+                    <strong>Bar infilling</strong> — Individual bars are replaced with a special infill placeholder token.
+                    The model then generates the missing musical content conditioned on the surrounding context.
+                </li>
+                <li>
+                    <strong>Track sampling</strong> — An entire track is treated as a new track by removing all of its bars,
+                    which are then generated autoregressively from left to right.
+                </li>
+            </ul>
+
+            <p>
+                During inference, several parameters control the size of the model’s context window,
+                as well as how many tracks and bars are processed simultaneously at each step.
+            </p>
+
+            <p>
+                Use the grid below to select target bars, define masking and track behavior,
+                and explore how context and generation windows evolve step by step.
+            </p>
+        </div>
+        
+        <div class="config-panel">
+            <div class="config-section">
+                <h2 class="section-title">Grid Configuration</h2>
+                <div class="input-group">
+                    <div class="input-wrapper">
+                        <label for="tracks">Tracks</label>
+                        <input type="number" id="tracks" value="4" min="1" max="32">
+                    </div>
+                    <div class="input-wrapper">
+                        <label for="bars">Bars</label>
+                        <input type="number" id="bars" value="4" min="1" max="64">
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="initializeGrid()">Create Grid</button>
+            </div>
+            
+            <div class="config-section">
+                <h2 class="section-title">Model Parameters</h2>
+                <div class="input-group">
+                    <div class="input-wrapper">
+                        <label for="modelDim">Model Dimension 
+                            <span class="legend-help" style="display: inline-flex; margin-left: 4px; vertical-align: middle;">?
+                                <span class="tooltip"><span class="tooltip-content" style="white-space: normal;">The size of the context window (in bars) used by the model. This includes conditioning and generated bars.</span></span>
+                            </span>
+                        </label>
+                        <input type="number" id="modelDim" value="8" min="1" max="32">
+                    </div>
+                    <div class="input-wrapper">
+                        <label for="tracksPerStep">Tracks per Step 
+                            <span class="legend-help" style="display: inline-flex; margin-left: 4px; vertical-align: middle;">?
+                                <span class="tooltip"><span class="tooltip-content" style="white-space: normal;">Number of tracks processed simultaneously in each step</span></span>
+                            </span>
+                        </label>
+                        <input type="number" id="tracksPerStep" value="1" min="1" max="8">
+                    </div>
+                    <div class="input-wrapper">
+                        <label for="barsPerStep">Bars per Step 
+                            <span class="legend-help" style="display: inline-flex; margin-left: 4px; vertical-align: middle;">?
+                                <span class="tooltip"><span class="tooltip-content" style="white-space: normal;">Number of bars generated per step</span></span>
+                            </span>
+                        </label>
+                        <input type="number" id="barsPerStep" value="1" min="1" max="8">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid-container">
+            <div class="grid-title">
+                <span>Selection Grid</span>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color"></div>
+                        <span>Selected</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color"></div>
+                        <span>Resample</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color"></div>
+                        <span>Ignore</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color"></div>
+                        <span>Mask</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color"></div>
+                        <span>Selected+Masked</span>
+                    </div>
+                    <span class="legend-help">?
+                        <span class="tooltip">
+                            <div class="tooltip-content" id="selectionTooltip">
+                                <div class="tooltip-item">
+                                    <div class="tooltip-color"></div>
+                                    <span>Bars selected for infilling</span>
+                                </div>
+                                <div class="tooltip-item">
+                                    <div class="tooltip-color"></div>
+                                    <span>Tracks processed autoregressively</span>
+                                </div>
+                                <div class="tooltip-item">
+                                    <div class="tooltip-color"></div>
+                                    <span>Tracks excluded from processing</span>
+                                </div>
+                                <div class="tooltip-item">
+                                    <div class="tooltip-color"></div>
+                                    <span>Bars masked from context</span>
+                                </div>
+                                <div class="tooltip-item">
+                                    <div class="tooltip-color"></div>
+                                    <span>Selected bars that are also masked</span>
+                                </div>
+                            </div>
+                        </span>
+                    </span>
+                </div>
+            </div>
+            <div class="selection-canvas-wrapper">
+                <canvas id="selectionCanvas"></canvas>
+            </div>
+            <div class="controls">
+                <button id="btn-select" class="btn-secondary active" onclick="setMode('select')">Select Bars</button>
+                <button id="btn-resample" class="btn-secondary" onclick="setMode('resample')">Resample Track</button>
+                <button id="btn-ignore" class="btn-secondary" onclick="setMode('ignore')">Ignore Track</button>
+                <button id="btn-mask" class="btn-secondary" onclick="setMode('mask')">Mask Bars</button>
+                <button class="btn-danger" onclick="clearAll()">Clear All</button>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="autoMask">
+                <label for="autoMask">Auto-mask unfilled bars during generation 
+                    <span class="legend-help" style="display: inline-flex; margin-left: 4px; vertical-align: middle;">?
+                        <span class="tooltip"><span class="tooltip-content" style="white-space: normal;">Automatically mask bars that are selected but not yet generated in each step</span></span>
+                    </span>
+                </label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="shuffle">
+                <label for="shuffle">Shuffle non-autoregressive steps 
+                    <span class="legend-help" style="display: inline-flex; margin-left: 4px; vertical-align: middle;">?
+                        <span class="tooltip"><span class="tooltip-content" style="white-space: normal;">Randomize the order of non-autoregressive generation steps</span></span>
+                    </span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn-primary" onclick="generateSteps()">Generate Steps</button>
+        </div>
+        
+        <div id="visualizationSection" class="visualization hidden">
+            <h2 class="section-title">Step Visualization</h2>
+            
+            <div class="grid-title">
+                <span id="vizGridTitle">Overview</span>
+                <div class="legend" id="vizLegend">
+                    <!-- Legend will be dynamically updated -->
+                </div>
+            </div>
+            
+            <div class="step-controls">
+                <button class="btn-secondary" onclick="previousStep()">← Previous</button>
+                <div class="slider-container">
+                    <input type="range" id="stepSlider" min="0" max="0" value="0" oninput="updateStep()">
+                </div>
+                <button class="btn-secondary" onclick="nextStep()">Next →</button>
+                <div class="step-info" id="stepInfo">Overview</div>
+            </div>
+            <div class="viz-canvas-wrapper">
+                <canvas id="stepCanvas" class="step-canvas"></canvas>
+            </div>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSteps">0</div>
+                    <div class="stat-label">Total Steps</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="currentBars">0</div>
+                    <div class="stat-label">Bars to Generate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="barRange">-</div>
+                    <div class="stat-label">Bar Range</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-text">
+                © <span id="currentYear">2026</span> <span class="footer-company" id="companyName"><a href="https://www.metacreation.net/">Metacreation Lab</a></span> | All rights reserved.
+            </div>
+            <button id="themeToggle" class="btn-secondary" onclick="toggleTheme()">
+                <span id="themeName">Dark Mode</span>
+            </button>
+        </div>
+    </footer>
+
+    <script src="main.js"></script>
+</body>
+</html>
