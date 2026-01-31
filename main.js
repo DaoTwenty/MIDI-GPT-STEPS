@@ -83,7 +83,20 @@ function initializeGrid() {
     state.barMask = Array(state.numTracks).fill(null).map(() => Array(state.numBars).fill(false));
     
     renderGrid();
-    setupCanvasClickHandler();
+    //setupCanvasClickHandler();
+}
+
+function setupStepInputs() {
+    const tracksInput = document.getElementById('tracksPerStep');
+    const barsInput = document.getElementById('barsPerStep');
+
+    // Redraw grid whenever values change
+    tracksInput.addEventListener('change', renderGrid);
+    barsInput.addEventListener('change', renderGrid);
+
+    // Optional: live update while typing
+    // tracksInput.addEventListener('input', renderGrid);
+    // barsInput.addEventListener('input', renderGrid);
 }
 
 function createDiagonalStripePattern(ctx, pSize, theme, stripeWidth = 4) {
@@ -116,17 +129,20 @@ function createDiagonalStripePattern(ctx, pSize, theme, stripeWidth = 4) {
 function renderGrid() {
     const canvas = document.getElementById('selectionCanvas');
     const ctx = canvas.getContext('2d');
-    
+
     const cellSize = 40;
     canvas.width = state.numBars * cellSize;
     canvas.height = state.numTracks * cellSize;
+
+    // Clear canvas completely before drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const theme = isDark ? COLORS.dark : COLORS.light;
 
     const diagonalPattern = createDiagonalStripePattern(ctx, cellSize, theme);
     
-    const gridColor = isDark ? '#48484a' : '#e8e8ed';
+    const gridColor = isDark ? '#919192' : '#c5c5c5';
     const darkGridColor = isDark ? '#f5f5f7' : '#1d1d1f';
     
     // Draw cells
@@ -218,24 +234,22 @@ function setupCanvasClickHandler() {
     const canvas = document.getElementById('selectionCanvas');
     const cellSize = 40;
     let mouseDown = false;
-    let lastCell = { i: -1, j: -1 }; // Track last cell activated
+    let lastCell = { i: -1, j: -1 };
 
-    canvas.addEventListener('mousedown', (event) => {
+    // Named functions so we can remove previous listeners
+    function handleMouseDown(event) {
         mouseDown = true;
         handleCellAtEvent(event);
-    });
-
-    canvas.addEventListener('mouseup', () => {
-        mouseDown = false;
-        lastCell = { i: -1, j: -1 }; // reset after release
-    });
-
-    canvas.addEventListener('mouseleave', () => {
+    }
+    function handleMouseUp() {
         mouseDown = false;
         lastCell = { i: -1, j: -1 };
-    });
-
-    canvas.addEventListener('mousemove', (event) => {
+    }
+    function handleMouseLeave() {
+        mouseDown = false;
+        lastCell = { i: -1, j: -1 };
+    }
+    function handleMouseMove(event) {
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
@@ -247,13 +261,12 @@ function setupCanvasClickHandler() {
             canvas.style.cursor = 'pointer';
             if (mouseDown && (i !== lastCell.i || j !== lastCell.j)) {
                 handleCellClick(i, j);
-                lastCell = { i, j }; // update last cell
+                lastCell = { i, j };
             }
         } else {
             canvas.style.cursor = 'default';
         }
-    });
-
+    }
     function handleCellAtEvent(event) {
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
@@ -262,11 +275,24 @@ function setupCanvasClickHandler() {
         const j = Math.floor(x / cellSize);
         const i = Math.floor(y / cellSize);
 
+
         if (i >= 0 && i < state.numTracks && j >= 0 && j < state.numBars) {
             handleCellClick(i, j);
-            lastCell = { i, j }; // remember cell immediately
+            lastCell = { i, j };
         }
     }
+
+    // First, remove any previous listeners (if called again)
+    canvas.removeEventListener('mousedown', handleMouseDown);
+    canvas.removeEventListener('mouseup', handleMouseUp);
+    canvas.removeEventListener('mouseleave', handleMouseLeave);
+    canvas.removeEventListener('mousemove', handleMouseMove);
+
+    // Then attach listeners
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mouseleave', handleMouseLeave);
+    canvas.addEventListener('mousemove', handleMouseMove);
 }
 
 function handleCellClick(i, j) {
@@ -1016,5 +1042,7 @@ function setupTooltips() {
 // Initialize on load
 initializeTheme();
 initializeGrid();
+setupCanvasClickHandler();
 setupTooltips();
 updateSelectionLegend();
+setupStepInputs()
